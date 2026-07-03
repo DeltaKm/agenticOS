@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N.E.X.U.S. — Agentic OS</title>
+<style>
+  :root {
+    --bg: #04050a;
+    --text: #c9d2e8;
+    --dim: #59627e;
+    --faint: #343c55;
+    --accent: #93a9ff;
+    --line: rgba(147,169,255,.18);
+    --ok: #7ef0b2;
+    --warn: #ffc46b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    overflow: hidden;
+    cursor: default;
+  }
+  #core { position: fixed; inset: 0; }
+  /* vignette + scanlines */
+  #fx {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%);
+  }
+  #hud { position: fixed; inset: 0; z-index: 3; }
+
+  .lbl {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+  .lbl .sub { color: var(--faint); letter-spacing: 2px; margin-left: 8px; }
+  .rule { height: 1px; background: linear-gradient(90deg, var(--line), transparent); margin-top: 6px; }
+
+  /* ---------- header ---------- */
+  header {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 26px 34px 0;
+  }
+  #logo .name {
+    font-size: 27px; font-weight: 700; letter-spacing: 10px; color: #e8edfb;
+  }
+  #logo .tag { margin-top: 6px; font-size: 8px; letter-spacing: 4px; color: var(--dim); }
+  nav { display: flex; gap: 26px; padding-top: 10px; font-size: 9px; letter-spacing: 3px; color: var(--dim); }
+  nav b { color: var(--accent); font-weight: normal; }
+  nav .live::before { content: "● "; color: var(--ok); font-size: 8px; animation: blink 2s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  #clock { text-align: right; }
+  #clock .hm { font-size: 44px; font-weight: 700; letter-spacing: 4px; color: #eef2fd; line-height: 1; }
+  #clock .hm .s { font-size: 20px; color: var(--dim); font-weight: 400; }
+  #clock .date { margin-top: 6px; font-size: 9px; letter-spacing: 4px; color: var(--dim); }
+
+  /* ---------- colonne ---------- */
+  aside { position: absolute; top: 118px; bottom: 30px; width: 252px; overflow: hidden; display: flex; flex-direction: column; gap: 26px; }
+  #left { left: 34px; }
+  #right { right: 34px; width: 270px; }
+  section { flex-shrink: 0; }
+
+  /* vitals */
+  .vital { margin-top: 16px; }
+  .vital .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .vital .k { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); }
+  .vital .delta { font-size: 9px; color: var(--ok); letter-spacing: 1px; }
+  .vital .v { font-size: 26px; font-weight: 700; color: #e8edfb; letter-spacing: 2px; margin: 2px 0 4px; }
+  .spark { width: 100%; height: 22px; display: block; opacity: .9; }
+
+  /* directives */
+  .directive { display: flex; gap: 10px; margin-top: 10px; font-size: 10.5px; line-height: 1.5; color: var(--text); }
+  .directive .box { flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px; border: 1px solid var(--dim); }
+  .directive.done .box { background: var(--accent); border-color: var(--accent); }
+  .directive.done { color: var(--faint); text-decoration: line-through; }
+  .directive.active .box { border-color: var(--ok); box-shadow: 0 0 6px rgba(126,240,178,.6); animation: blink 1.4s infinite; }
+  .directive .who { color: var(--faint); font-size: 9px; letter-spacing: 1px; }
+
+  /* log trail */
+  #trail { font-size: 9.5px; line-height: 2; color: var(--dim); }
+  #trail .row { display: flex; justify-content: space-between; gap: 10px; }
+  #trail .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #trail .t { color: var(--faint); flex-shrink: 0; }
+
+  /* command deck */
+  #deck { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 14px; }
+  #deck button {
+    background: transparent;
+    border: 1px solid rgba(147,169,255,.14);
+    color: var(--dim);
+    font-family: inherit;
+    font-size: 8.5px;
+    letter-spacing: 2px;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  #deck button::before { content: "+ "; color: var(--accent); }
+  #deck button:hover { color: #e8edfb; border-color: var(--accent); background: rgba(147,169,255,.06); }
+  #cmd {
+    width: 100%; margin-top: 10px;
+    background: transparent;
+    border: 0; border-bottom: 1px solid rgba(147,169,255,.2);
+    color: var(--text);
+    font-family: inherit; font-size: 10.5px; letter-spacing: 1px;
+    padding: 7px 2px; outline: none;
+  }
+  #cmd::placeholder { color: var(--faint); letter-spacing: 2px; }
+  #cmd:focus { border-color: var(--accent); }
+
+  /* agents / runners */
+  .runner { display: flex; align-items: baseline; gap: 10px; margin-top: 11px; font-size: 10.5px; }
+  .runner .st { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex-shrink: 0; align-self: center; }
+  .runner.working .st { background: var(--ok); box-shadow: 0 0 8px rgba(126,240,178,.8); animation: blink 1.2s infinite; }
+  .runner .nm { color: #e8edfb; letter-spacing: 2px; width: 62px; }
+  .runner .rl { color: var(--faint); font-size: 9px; letter-spacing: 1.5px; flex: 1; }
+  .runner .ct { color: var(--dim); font-size: 9px; }
+  .runner .doing { display: block; margin: 3px 0 0 17px; font-size: 9px; color: var(--warn); letter-spacing: 1px; }
+
+  /* schedule */
+  #sched { margin-top: 12px; }
+  .slot { display: flex; gap: 12px; margin-bottom: 8px; font-size: 9.5px; line-height: 1.6; }
+  .slot .h { color: var(--accent); flex-shrink: 0; width: 38px; letter-spacing: 1px; }
+  .slot .txt { color: var(--dim); }
+  .slot.past { opacity: .32; }
+  .slot.now .h { color: var(--ok); }
+  .slot.now .txt { color: #e8edfb; }
+  .slot.now .h::before { content: "▸ "; }
+  #focus-note { margin-top: 10px; font-size: 9px; line-height: 1.8; color: var(--faint); }
+
+  /* audio uplink */
+  #wave { width: 100%; height: 34px; display: block; margin-top: 12px; }
+
+  /* callout completamento task */
+  #callout {
+    position: absolute; left: 50%; bottom: 152px; transform: translateX(-50%);
+    font-size: 10px; letter-spacing: 3px; color: var(--ok);
+    text-transform: uppercase; white-space: nowrap;
+    opacity: 0; transition: opacity .4s;
+    text-shadow: 0 0 14px rgba(126,240,178,.55);
+  }
+  #callout.show { opacity: 1; }
+
+  /* boot sequence */
+  #boot {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity .7s;
+  }
+  #boot.off { opacity: 0; pointer-events: none; }
+  #boot pre {
+    font-family: inherit; font-size: 11px; line-height: 2.2;
+    color: var(--dim); letter-spacing: 1.5px; min-width: 320px;
+  }
+  #boot pre b { color: var(--ok); font-weight: normal; }
+
+  /* glitch periodico sul logo */
+  #logo .name { animation: glitch 9s infinite; }
+  @keyframes glitch {
+    0%, 93%, 100% { text-shadow: none; transform: none; }
+    94% { text-shadow: 2px 0 rgba(255,80,180,.65), -2px 0 rgba(80,220,255,.65); transform: translateX(1px); }
+    95% { text-shadow: -2px 0 rgba(255,80,180,.65), 2px 0 rgba(80,220,255,.65); transform: translateX(-1px); }
+    96% { text-shadow: none; transform: none; }
+  }
+
+  /* ---------- bottom center ---------- */
+  #primary {
+    position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+    text-align: center; width: 560px;
+  }
+  #primary .lbl { color: var(--accent); opacity: .85; }
+  #big {
+    font-size: 74px; font-weight: 700; letter-spacing: 6px; color: #f2f5ff;
+    line-height: 1.1; text-shadow: 0 0 30px rgba(147,169,255,.35);
+  }
+  #big small { font-size: 18px; letter-spacing: 4px; color: var(--dim); font-weight: 400; }
+  #primary .meta { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); margin-top: 4px; }
+  #primary .meta b { color: var(--text); font-weight: normal; }
+  #primary .deploy { font-size: 8.5px; letter-spacing: 2px; color: var(--faint); margin-top: 8px; }
+
+  /* ---------- layout stretto: impila le colonne ---------- */
+  @media (max-width: 900px) {
+    body { overflow-y: auto; }
+    #hud { position: static; padding: 20px 18px 30px; }
+    header { position: static; flex-wrap: wrap; gap: 14px; padding: 0 0 8px; }
+    #logo .name { font-size: 21px; letter-spacing: 7px; }
+    nav { display: none; }
+    #clock { margin-left: auto; }
+    #clock .hm { font-size: 30px; }
+    aside { position: static; width: 100%; margin-top: 26px; gap: 26px; }
+    #primary { position: static; transform: none; width: 100%; margin-top: 34px; }
+    #big { font-size: 56px; }
+    #core { position: fixed; opacity: .4; }
+    section { min-height: 0; }
+    #callout { position: fixed; bottom: 18px; z-index: 5; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="core"></canvas>
+<div id="fx"></div>
+<div id="boot"><pre id="boot-lines"></pre></div>
+
+<div id="hud">
+  <header>
+    <div id="logo">
+      <div class="name">N.E.X.U.S.</div>
+      <div class="tag">NEURAL EXECUTIVE UNIT · AGENTIC SYSTEM</div>
+    </div>
+    <nav>
+      <span class="live"><b>CORE</b> · ONLINE</span>
+      <span id="link-st"><b>LINK</b> · …</span>
+      <span><b>RUNNER</b> · ALIVE</span>
+    </nav>
+    <div id="clock">
+      <div class="hm">--:--<span class="s">:--</span></div>
+      <div class="date">--- · --- --</div>
+    </div>
+  </header>
+
+  <aside id="left">
+    <section>
+      <div class="lbl">SYSTEM VITALS<span class="sub">KERNEL.LINE</span></div>
+      <div class="rule"></div>
+      <div id="vitals"></div>
+    </section>
+    <section>
+      <div class="lbl">DIRECTIVES<span class="sub">QUEUE</span></div>
+      <div class="rule"></div>
+      <div id="directives"><div class="directive"><span class="box"></span><span style="color:var(--faint)">nessuna direttiva — usa il command deck →</span></div></div>
+    </section>
+    <section style="flex:1;min-height:0">
+      <div class="lbl">EVENT TRAIL<span class="sub">SYSLOG</span></div>
+      <div class="rule"></div>
+      <div id="trail" style="margin-top:10px"></div>
+    </section>
+  </aside>
+
+  <aside id="right">
+    <section>
+      <div class="lbl">COMMAND DECK<span class="sub" id="deck-st">IDLE</span></div>
+      <div class="rule"></div>
+      <div id="deck"></div>
+      <input id="cmd" placeholder="MANUAL DIRECTIVE ▸ scrivi e premi invio" autocomplete="off">
+    </section>
+    <section>
+      <div class="lbl">RUNNERS<span class="sub">AGENTS</span></div>
+      <div class="rule"></div>
+      <div id="runners"></div>
+    </section>
+    <section>
+      <div class="lbl">SCHEDULE<span class="sub">TODAY</span></div>
+      <div class="rule"></div>
+      <div id="sched"></div>
+      <div id="focus-note">Focus — esecuzione, non ingegneria: proteggi un blocco lungo senza interruzioni e lascia che i runner chiudano la coda.</div>
+    </section>
+    <section>
+      <div class="lbl">AUDIO<span class="sub">UPLINK</span></div>
+      <div class="rule"></div>
+      <canvas id="wave" width="270" height="34"></canvas>
+    </section>
+  </aside>
+
+  <div id="callout"></div>
+
+  <div id="primary">
+    <div class="lbl">PRIMARY DIRECTIVE · ROAD TO 100</div>
+    <div id="big">0 <small>TASKS</small></div>
+    <div class="meta">TARGET <b>100</b> · IN CODA <b id="m-queue">0</b> · SESSIONE <b id="m-session">+0</b></div>
+    <div class="deploy">latest deploy — nexus kernel v0.3.0 · sse uplink · 4 runners</div>
+  </div>
+</div>
+
+<script>
+// ============================================================ particle core
+const canvas = document.getElementById('core');
+const ctx = canvas.getContext('2d');
+let W, H, CX, CY;
+function resize() {
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+  CX = W / 2; CY = H * 0.46;
+}
+addEventListener('resize', resize);
+resize();
+
+const N = 750;
+const pts = [];
+for (let i = 0; i < N; i++) {
+  const th = 2 * Math.PI * Math.random();
+  const ph = Math.acos(2 * Math.random() - 1);
+  const r = 175 * (0.5 + 0.5 * Math.pow(Math.random(), 0.35));
+  pts.push({
+    x: r * Math.sin(ph) * Math.cos(th),
+    y: r * Math.cos(ph),
+    z: r * Math.sin(ph) * Math.sin(th),
+    tw: Math.random() * Math.PI * 2,
+  });
+}
+// coppie vicine per le linee della "costellazione"
+const pairs = [];
+for (let i = 0; i < N && pairs.length < 420; i++) {
+  for (let j = i + 1; j < N; j++) {
+    const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y, dz = pts[i].z - pts[j].z;
+    if (dx * dx + dy * dy + dz * dz < 34 * 34) { pairs.push([i, j]); break; }
+  }
+}
+
+let rot = 0;
+let activity = 0;      // 0..1 — quota di runner al lavoro (accelera il nucleo)
+let pulse = 0;         // lampo quando arriva un evento
+const proj = new Array(N);
+
+function frame(t) {
+  ctx.clearRect(0, 0, W, H);
+  rot += 0.0016 + activity * 0.005;
+  pulse *= 0.94;
+  const S = Math.min(W, H) / 640;
+  const cy_ = Math.cos(rot), sy_ = Math.sin(rot);
+  const tilt = 0.32, cx_ = Math.cos(tilt), sx_ = Math.sin(tilt);
+
+  for (let i = 0; i < N; i++) {
+    const p = pts[i];
+    const x = p.x * cy_ - p.z * sy_;
+    let z = p.x * sy_ + p.z * cy_;
+    const y = p.y * cx_ - z * sx_;
+    z = p.y * sx_ + z * cx_;
+    const f = 330 / (330 + z);
+    proj[i] = [CX + x * f * S * 1.55, CY + y * f * S * 1.55, f];
+  }
+
+  ctx.lineWidth = 0.5;
+  for (const [i, j] of pairs) {
+    const a = proj[i], b = proj[j];
+    const al = (a[2] - 0.72) * (0.28 + pulse * 0.5);
+    if (al <= 0) continue;
+    ctx.strokeStyle = `rgba(150,170,255,${al})`;
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+  for (let i = 0; i < N; i++) {
+    const [sx, sy, f] = proj[i];
+    const tw = 0.55 + 0.45 * Math.sin(t * 0.0022 + pts[i].tw);
+    const al = Math.max(0, (f - 0.62)) * 1.9 * tw + pulse * 0.25;
+    if (al <= 0.02) continue;
+    ctx.fillStyle = `rgba(185,200,255,${Math.min(1, al)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.4, 1.5 * (f - 0.5) * 2) * S, 0, 7); ctx.fill();
+  }
+  // anelli orbitali + satelliti
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(147,169,255,${0.09 + activity * 0.08})`;
+  ctx.rotate(-0.5);
+  ctx.beginPath(); ctx.ellipse(0, 0, 232 * S, 58 * S, 0, 0, 7); ctx.stroke();
+  ctx.rotate(0.9);
+  ctx.strokeStyle = 'rgba(147,169,255,0.05)';
+  ctx.beginPath(); ctx.ellipse(0, 0, 262 * S, 40 * S, 0, 0, 7); ctx.stroke();
+  ctx.restore();
+  for (let k = 0; k < 3; k++) {
+    const a = t * 0.00035 + k * 2.1;
+    const ex = 232 * S * Math.cos(a), ey = 58 * S * Math.sin(a);
+    const rx = ex * Math.cos(-0.5) - ey * Math.sin(-0.5);
+    const ry = ex * Math.sin(-0.5) + ey * Math.cos(-0.5);
+    ctx.fillStyle = 'rgba(190,205,255,.85)';
+    ctx.beginPath(); ctx.arc(CX + rx, CY + ry, 1.6, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(147,169,255,.18)';
+    ctx.beginPath(); ctx.arc(CX + rx, CY + ry, 4.5, 0, 7); ctx.fill();
+  }
+
+  // alone centrale
+  const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, 260 * S);
+  g.addColorStop(0, `rgba(120,140,255,${0.06 + activity * 0.05 + pulse * 0.06})`);
+  g.addColorStop(1, 'rgba(120,140,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ============================================================ clock
+const DAYS = ['DOM','LUN','MAR','MER','GIO','VEN','SAB'];
+const MONTHS = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
+function tickClock() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  document.querySelector('#clock .hm').innerHTML =
+    `${p(d.getHours())}:${p(d.getMinutes())}<span class="s">:${p(d.getSeconds())}</span>`;
+  document.querySelector('#clock .date').textContent =
+    `${DAYS[d.getDay()]} · ${MONTHS[d.getMonth()]} ${p(d.getDate())}`;
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ============================================================ vitals + sparkline
+const vitalsEl = document.getElementById('vitals');
+const VITALS = [
+  { id: 'done',   k: 'TASKS COMPLETED', get: () => state.done },
+  { id: 'queue',  k: 'QUEUE DEPTH',     get: () => state.queue },
+  { id: 'active', k: 'RUNNERS ACTIVE',  get: () => state.active },
+  { id: 'evt',    k: 'EVENTS / MIN',    get: () => state.epm },
+];
+const hist = {};
+vitalsEl.innerHTML = VITALS.map(v => `
+  <div class="vital">
+    <div class="top"><span class="k">▸ ${v.k}</span><span class="delta" id="d-${v.id}"></span></div>
+    <div class="v" id="v-${v.id}">0</div>
+    <canvas class="spark" id="s-${v.id}" width="252" height="22"></canvas>
+  </div>`).join('');
+for (const v of VITALS) hist[v.id] = new Array(60).fill(0);
+
+function drawSpark(id) {
+  const c = document.getElementById('s-' + id);
+  const x = c.getContext('2d');
+  const h = hist[id], max = Math.max(1, ...h);
+  x.clearRect(0, 0, c.width, c.height);
+  x.strokeStyle = 'rgba(147,169,255,.75)';
+  x.lineWidth = 1;
+  x.beginPath();
+  h.forEach((val, i) => {
+    const px = (i / (h.length - 1)) * c.width;
+    const py = c.height - 2 - (val / max) * (c.height - 5);
+    i ? x.lineTo(px, py) : x.moveTo(px, py);
+  });
+  x.stroke();
+}
+
+let evtCount = 0;
+const state = { done: 0, queue: 0, active: 0, epm: 0, session: 0 };
+setInterval(() => {
+  state.epm = evtCount * 30; // finestra 2s → eventi/min
+  evtCount = 0;
+  for (const v of VITALS) {
+    hist[v.id].shift(); hist[v.id].push(v.get());
+    document.getElementById('v-' + v.id).textContent = v.get();
+    const h = hist[v.id], d = h[h.length - 1] - h[h.length - 2];
+    const el = document.getElementById('d-' + v.id);
+    el.textContent = d > 0 ? `▲ +${d}` : d < 0 ? `▼ ${d}` : '';
+    el.style.color = d >= 0 ? 'var(--ok)' : 'var(--warn)';
+    drawSpark(v.id);
+  }
+}, 2000);
+
+// ============================================================ SSE uplink
+const linkEl = document.getElementById('link-st');
+const es = new EventSource('/api/events');
+es.onopen = () => linkEl.innerHTML = '<b>LINK</b> · ONLINE';
+es.onerror = () => linkEl.innerHTML = '<b>LINK</b> · RETRY…';
+
+es.addEventListener('agents', e => {
+  const agents = JSON.parse(e.data);
+  const working = agents.filter(a => a.status === 'working');
+  state.active = working.length;
+  activity = working.length / agents.length;
+  state.done = agents.reduce((s, a) => s + a.completed, 0);
+  bigTarget = state.done;
+  document.getElementById('m-session').textContent = '+' + state.done;
+  document.getElementById('deck-st').textContent =
+    working.length ? `${working.length} ACTIVE` : 'IDLE';
+  document.getElementById('runners').innerHTML = agents.map(a => `
+    <div class="runner ${a.status}">
+      <span class="st"></span>
+      <span class="nm">${a.name.toUpperCase()}</span>
+      <span class="rl">${a.role.toUpperCase()}</span>
+      <span class="ct">${a.completed} ✓</span>
+    </div>
+    ${a.task ? `<span class="doing">└ #${a.task.id} ${a.task.goal}</span>` : ''}`).join('');
+});
+
+es.addEventListener('tasks', e => {
+  const tasks = JSON.parse(e.data);
+  state.queue = tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('m-queue').textContent = state.queue;
+  const last = [...tasks].slice(-7).reverse();
+  document.getElementById('directives').innerHTML = last.map(t => `
+    <div class="directive ${t.status === 'done' ? 'done' : t.status === 'in_progress' ? 'active' : ''}">
+      <span class="box"></span>
+      <span>${t.goal} <span class="who">${t.agent ? '· ' + t.agent.toUpperCase() : ''}</span></span>
+    </div>`).join('') || '';
+});
+
+const trailEl = document.getElementById('trail');
+es.addEventListener('log', e => {
+  evtCount++;
+  pulse = 1;
+  const d = JSON.parse(e.data);
+  const row = document.createElement('div');
+  row.className = 'row';
+  const time = new Date(d.time).toLocaleTimeString('it-IT');
+  row.innerHTML = `<span class="m"></span><span class="t">${time}</span>`;
+  row.querySelector('.m').textContent = `[${d.agent}] ${d.message}`;
+  trailEl.prepend(row);
+  while (trailEl.children.length > 14) trailEl.lastChild.remove();
+  if (d.message.includes('✔')) showCallout(`✔ ${d.agent} · task complete`);
+});
+
+// ============================================================ callout
+const calloutEl = document.getElementById('callout');
+let calloutTimer;
+function showCallout(text) {
+  calloutEl.textContent = text;
+  calloutEl.classList.add('show');
+  clearTimeout(calloutTimer);
+  calloutTimer = setTimeout(() => calloutEl.classList.remove('show'), 2600);
+}
+
+// ============================================================ contatore animato
+let bigCur = 0, bigTarget = 0;
+setInterval(() => {
+  if (bigCur === bigTarget) return;
+  bigCur += Math.sign(bigTarget - bigCur);
+  document.getElementById('big').innerHTML =
+    `${bigCur.toLocaleString('it-IT')} <small>TASKS</small>`;
+}, 70);
+
+// ============================================================ schedule
+const SLOTS = [
+  [9, 30, 'Deep work: chiudere la coda direttive del kernel'],
+  [11, 30, 'Registrare la demo del command deck (live HUD)'],
+  [14, 0, 'Edit pass + b-roll, sequenza dei callout'],
+  [16, 30, 'Lock upload: titolo, thumbnail, descrizione'],
+  [19, 0, 'EOD review + /close-day'],
+];
+function renderSched() {
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  let next = SLOTS.findIndex(([h, m]) => h * 60 + m > cur);
+  if (next === -1) next = SLOTS.length;
+  const active = Math.max(0, next - 1);
+  document.getElementById('sched').innerHTML = SLOTS.map(([h, m, txt], i) => `
+    <div class="slot ${i < active ? 'past' : i === active ? 'now' : ''}">
+      <span class="h">${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</span>
+      <span class="txt">${txt}</span>
+    </div>`).join('');
+}
+renderSched();
+setInterval(renderSched, 60000);
+
+// ============================================================ audio uplink
+const wv = document.getElementById('wave');
+const wx = wv.getContext('2d');
+const BARS = 48;
+const amp = new Array(BARS).fill(0.08);
+function waveFrame(t) {
+  wx.clearRect(0, 0, wv.width, wv.height);
+  const target = 0.12 + activity * 0.8;
+  const bw = wv.width / BARS;
+  for (let i = 0; i < BARS; i++) {
+    const n = Math.abs(Math.sin(t * 0.006 + i * 1.7) * Math.sin(t * 0.0023 + i * 0.7));
+    amp[i] += (target * (0.25 + n) + Math.random() * 0.04 - amp[i]) * 0.18;
+    const h = 2 + Math.min(1, amp[i]) * (wv.height - 4);
+    wx.fillStyle = `rgba(147,169,255,${0.25 + Math.min(1, amp[i]) * 0.6})`;
+    wx.fillRect(i * bw, (wv.height - h) / 2, bw - 2, h);
+  }
+  requestAnimationFrame(waveFrame);
+}
+requestAnimationFrame(waveFrame);
+
+// ============================================================ boot sequence
+(async () => {
+  const LINES = [
+    ['NEXUS KERNEL v0.3.0', 160],
+    ['memory matrix ........ <b>OK</b>', 260],
+    ['agent runners 4/4 .... <b>ALIVE</b>', 230],
+    ['sse uplink ........... <b>ONLINE</b>', 250],
+    ['particle core ........ <b>SPINNING</b>', 210],
+    ['boot complete — benvenuto, operatore', 420],
+  ];
+  const pre = document.getElementById('boot-lines');
+  for (const [line, wait] of LINES) {
+    pre.innerHTML += line + '\n';
+    await new Promise(r => setTimeout(r, wait));
+  }
+  document.getElementById('boot').classList.add('off');
+})();
+
+// ============================================================ command deck
+const PRESETS = [
+  'METRICS PULL', 'AM REPORT',
+  'INBOX BRIEF',  'GH TRENDING',
+  'TREND SCAN',   'CODE AUDIT',
+  'PLAN TODAY',   'PLAN TMRW',
+  'LOG SWEEP',    'MEM SYNC',
+];
+function dispatch(goal) {
+  return fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goal }),
+  });
+}
+document.getElementById('deck').innerHTML =
+  PRESETS.map(p => `<button data-g="${p}">${p}</button>`).join('');
+document.getElementById('deck').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) dispatch(b.dataset.g.toLowerCase());
+});
+document.getElementById('cmd').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    dispatch(e.target.value.trim());
+    e.target.value = '';
+  }
+});
+</script>
+</body>
+</html>
